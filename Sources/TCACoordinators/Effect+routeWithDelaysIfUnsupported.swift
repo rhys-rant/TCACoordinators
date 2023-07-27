@@ -20,9 +20,17 @@ public extension EffectPublisher where Action: IndexedRouterAction, Failure == N
     var transformedRoutes = routes
     transform(&transformedRoutes)
     let steps = RouteSteps.calculateSteps(from: routes, to: transformedRoutes)
-		return .publisher {
-			scheduledSteps(steps: steps, scheduler: scheduler)
-				.map(Action.updateRoutes)
+
+		return .run { send in
+			guard let head = steps.first else { return }
+			let tail = steps.dropFirst()
+
+			await send(.updateRoutes(head))
+
+			for step in tail {
+				try await scheduler.sleep(for: .seconds(0.65))
+				await send(.updateRoutes(step))
+			}
 		}
   }
   /// Allows arbitrary changes to be made to the routes collection, even if SwiftUI does not support such changes within a single
@@ -35,7 +43,7 @@ public extension EffectPublisher where Action: IndexedRouterAction, Failure == N
   /// - Returns: An Effect stream of actions with incremental updates to routes over time. If the proposed change is supported
   ///   within a single update, the Effect stream will include only one element.
   static func routeWithDelaysIfUnsupported(_ routes: [Route<Action.Screen>], _ transform: (inout [Route<Action.Screen>]) -> Void) -> Self {
-    routeWithDelaysIfUnsupported(routes, scheduler: DispatchQueue.main.eraseToAnyScheduler(), transform)
+		routeWithDelaysIfUnsupported(routes, scheduler: .main, transform)
   }
 }
 
@@ -54,9 +62,17 @@ public extension EffectPublisher where Action: IdentifiedRouterAction, Failure =
     var transformedRoutes = routes
     transform(&transformedRoutes)
     let steps = RouteSteps.calculateSteps(from: Array(routes), to: Array(transformedRoutes))
-		return .publisher {
-			scheduledSteps(steps: steps, scheduler: scheduler)
-				.map { Action.updateRoutes(IdentifiedArray(uncheckedUniqueElements: $0)) }
+
+		return .run { send in
+			guard let head = steps.first else { return }
+			let tail = steps.dropFirst()
+
+			await send(.updateRoutes(IdentifiedArray(uncheckedUniqueElements: head)))
+
+			for step in tail {
+				try await scheduler.sleep(for: .seconds(0.65))
+				await send(.updateRoutes(IdentifiedArray(uncheckedUniqueElements: step)))
+			}
 		}
   }
   /// Allows arbitrary changes to be made to the routes collection, even if SwiftUI does not support such changes within a single
@@ -69,20 +85,6 @@ public extension EffectPublisher where Action: IdentifiedRouterAction, Failure =
   /// - Returns: An Effect stream of actions with incremental updates to routes over time. If the proposed change is supported
   ///   within a single update, the Effect stream will include only one element.
   static func routeWithDelaysIfUnsupported(_ routes: IdentifiedArrayOf<Route<Action.Screen>>, _ transform: (inout IdentifiedArrayOf<Route<Action.Screen>>) -> Void) -> Self {
-    return routeWithDelaysIfUnsupported(routes, scheduler: DispatchQueue.main.eraseToAnyScheduler(), transform)
+    routeWithDelaysIfUnsupported(routes, scheduler: .main, transform)
   }
-}
-
-/// Transforms a series of steps into an AnyPublisher of those steps, each one delayed in time.
-func scheduledSteps<Screen>(steps: [[Route<Screen>]], scheduler: AnySchedulerOf<DispatchQueue>) -> AnyPublisher<[Route<Screen>], Never> {
-  guard let head = steps.first else {
-    return Empty().eraseToAnyPublisher()
-  }
-  let timer = Just(scheduler.now)
-    .append(Publishers.Timer(every: 0.65, scheduler: scheduler).autoconnect())
-  let tail = Publishers.Zip(steps.dropFirst().publisher, timer)
-    .map { $0.0 }
-  return Just(head)
-    .append(tail)
-    .eraseToAnyPublisher()
 }
