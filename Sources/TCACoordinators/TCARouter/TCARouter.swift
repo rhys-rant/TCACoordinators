@@ -34,19 +34,33 @@ public struct TCARouter<
     )
   }
 
+	@ObservedObject private var viewStore: ViewStore<CoordinatorState, CoordinatorAction>
+
   public var body: some View {
-    WithViewStore(store, removeDuplicates: { routes($0).map(\.style) == routes($1).map(\.style) }) { _ in
-      Router(
-        ViewStore(store).binding(
-          get: routes,
-          send: updateRoutes
-        ),
-        buildView: { screen, index in
-          screenContent(scopedStore(index: index, screen: screen))
-        }
-      )
-    }
+		Router(
+			viewStore.binding(get: routes, send: updateRoutes),
+			buildView: { screen, index in
+				screenContent(scopedStore(index: index, screen: screen))
+			}
+		)
   }
+
+	init(
+		store: Store<CoordinatorState, CoordinatorAction>,
+		routes: @escaping (CoordinatorState) -> [Route<Screen>],
+		updateRoutes: @escaping ([Route<Screen>]) -> CoordinatorAction,
+		action: @escaping (ID, ScreenAction) -> CoordinatorAction,
+		identifier: @escaping (Screen, Int) -> ID,
+		screenContent: @escaping (Store<Screen, ScreenAction>) -> ScreenContent
+	) {
+		self.store = store
+		self.routes = routes
+		self.updateRoutes = updateRoutes
+		self.action = action
+		self.identifier = identifier
+		self.screenContent = screenContent
+		self.viewStore = ViewStore(store, observe: { $0 }, removeDuplicates: { routes($0).map(\.style) == routes($1).map(\.style) })
+	}
 }
 
 public extension TCARouter where Screen: Identifiable {
@@ -64,7 +78,7 @@ public extension TCARouter where Screen: Identifiable {
       updateRoutes: { updateRoutes(IdentifiedArray(uniqueElements: $0)) },
       action: action,
       identifier: { state, _ in state.id },
-      screenContent: screenContent
+			screenContent: screenContent
     )
   }
 }
@@ -84,7 +98,7 @@ public extension TCARouter where ID == Int {
       updateRoutes: updateRoutes,
       action: action,
       identifier: { $1 },
-      screenContent: screenContent
+			screenContent: screenContent
     )
   }
 }
