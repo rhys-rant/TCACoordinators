@@ -16,13 +16,14 @@ public extension EffectPublisher where Action: IndexedRouterAction, Failure == N
   /// - Parameter transform: A closure transforming the routes into their new state.
   /// - Returns: An Effect stream of actions with incremental updates to routes over time. If the proposed change is supported
   ///   within a single update, the Effect stream will include only one element.
-  static func routeWithDelaysIfUnsupported(_ routes: [Route<Output.Screen>], scheduler: AnySchedulerOf<DispatchQueue>, _ transform: (inout [Route<Output.Screen>]) -> Void) -> Self {
+  static func routeWithDelaysIfUnsupported(_ routes: [Route<Action.Screen>], scheduler: AnySchedulerOf<DispatchQueue>, _ transform: (inout [Route<Action.Screen>]) -> Void) -> Self {
     var transformedRoutes = routes
     transform(&transformedRoutes)
     let steps = RouteSteps.calculateSteps(from: routes, to: transformedRoutes)
-    return scheduledSteps(steps: steps, scheduler: scheduler)
-      .map { Output.updateRoutes($0) }
-      .eraseToEffect()
+		return .publisher {
+			scheduledSteps(steps: steps, scheduler: scheduler)
+				.map(Action.updateRoutes)
+		}
   }
   /// Allows arbitrary changes to be made to the routes collection, even if SwiftUI does not support such changes within a single
   /// state update. For example, SwiftUI only supports pushing, presenting or dismissing one screen at a time. Any changes can be
@@ -33,7 +34,7 @@ public extension EffectPublisher where Action: IndexedRouterAction, Failure == N
   /// - Parameter transform: A closure transforming the routes into their new state.
   /// - Returns: An Effect stream of actions with incremental updates to routes over time. If the proposed change is supported
   ///   within a single update, the Effect stream will include only one element.
-  static func routeWithDelaysIfUnsupported(_ routes: [Route<Output.Screen>], _ transform: (inout [Route<Output.Screen>]) -> Void) -> Self {
+  static func routeWithDelaysIfUnsupported(_ routes: [Route<Action.Screen>], _ transform: (inout [Route<Action.Screen>]) -> Void) -> Self {
     routeWithDelaysIfUnsupported(routes, scheduler: DispatchQueue.main.eraseToAnyScheduler(), transform)
   }
 }
@@ -49,13 +50,14 @@ public extension EffectPublisher where Action: IdentifiedRouterAction, Failure =
   /// - Parameter transform: A closure transforming the routes into their new state.
   /// - Returns: An Effect stream of actions with incremental updates to routes over time. If the proposed change is supported
   ///   within a single update, the Effect stream will include only one element.
-  static func routeWithDelaysIfUnsupported(_ routes: IdentifiedArrayOf<Route<Output.Screen>>, scheduler: AnySchedulerOf<DispatchQueue>, _ transform: (inout IdentifiedArrayOf<Route<Output.Screen>>) -> Void) -> Self {
+  static func routeWithDelaysIfUnsupported(_ routes: IdentifiedArrayOf<Route<Action.Screen>>, scheduler: AnySchedulerOf<DispatchQueue>, _ transform: (inout IdentifiedArrayOf<Route<Action.Screen>>) -> Void) -> Self {
     var transformedRoutes = routes
     transform(&transformedRoutes)
     let steps = RouteSteps.calculateSteps(from: Array(routes), to: Array(transformedRoutes))
-    return scheduledSteps(steps: steps, scheduler: scheduler)
-      .map { Output.updateRoutes(IdentifiedArray(uncheckedUniqueElements: $0)) }
-      .eraseToEffect()
+		return .publisher {
+			scheduledSteps(steps: steps, scheduler: scheduler)
+				.map { Action.updateRoutes(IdentifiedArray(uncheckedUniqueElements: $0)) }
+		}
   }
   /// Allows arbitrary changes to be made to the routes collection, even if SwiftUI does not support such changes within a single
   /// state update. For example, SwiftUI only supports pushing, presenting or dismissing one screen at a time. Any changes can be
@@ -66,7 +68,7 @@ public extension EffectPublisher where Action: IdentifiedRouterAction, Failure =
   /// - Parameter transform: A closure transforming the routes into their new state.
   /// - Returns: An Effect stream of actions with incremental updates to routes over time. If the proposed change is supported
   ///   within a single update, the Effect stream will include only one element.
-  static func routeWithDelaysIfUnsupported(_ routes: IdentifiedArrayOf<Route<Output.Screen>>, _ transform: (inout IdentifiedArrayOf<Route<Output.Screen>>) -> Void) -> Self {
+  static func routeWithDelaysIfUnsupported(_ routes: IdentifiedArrayOf<Route<Action.Screen>>, _ transform: (inout IdentifiedArrayOf<Route<Action.Screen>>) -> Void) -> Self {
     return routeWithDelaysIfUnsupported(routes, scheduler: DispatchQueue.main.eraseToAnyScheduler(), transform)
   }
 }
