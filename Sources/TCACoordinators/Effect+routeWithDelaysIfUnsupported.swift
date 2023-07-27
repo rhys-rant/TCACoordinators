@@ -22,14 +22,8 @@ public extension EffectPublisher where Action: IndexedRouterAction, Failure == N
     let steps = RouteSteps.calculateSteps(from: routes, to: transformedRoutes)
 
 		return .run { send in
-			guard let head = steps.first else { return }
-			let tail = steps.dropFirst()
-
-			await send(.updateRoutes(head))
-
-			for step in tail {
-				try await scheduler.sleep(for: .seconds(0.65))
-				await send(.updateRoutes(step))
+			for await screen in scheduledSteps(steps: steps, scheduler: scheduler) {
+				await send(.updateRoutes(screen))
 			}
 		}
   }
@@ -64,14 +58,8 @@ public extension EffectPublisher where Action: IdentifiedRouterAction, Failure =
     let steps = RouteSteps.calculateSteps(from: Array(routes), to: Array(transformedRoutes))
 
 		return .run { send in
-			guard let head = steps.first else { return }
-			let tail = steps.dropFirst()
-
-			await send(.updateRoutes(IdentifiedArray(uncheckedUniqueElements: head)))
-
-			for step in tail {
-				try await scheduler.sleep(for: .seconds(0.65))
-				await send(.updateRoutes(IdentifiedArray(uncheckedUniqueElements: step)))
+			for await screen in scheduledSteps(steps: steps, scheduler: scheduler) {
+				await send(.updateRoutes(IdentifiedArray(uncheckedUniqueElements: screen)))
 			}
 		}
   }
@@ -87,4 +75,32 @@ public extension EffectPublisher where Action: IdentifiedRouterAction, Failure =
   static func routeWithDelaysIfUnsupported(_ routes: IdentifiedArrayOf<Route<Action.Screen>>, _ transform: (inout IdentifiedArrayOf<Route<Action.Screen>>) -> Void) -> Self {
     routeWithDelaysIfUnsupported(routes, scheduler: .main, transform)
   }
+}
+
+func scheduledSteps<Screen>(
+	steps: [[Route<Screen>]],
+	scheduler: AnySchedulerOf<DispatchQueue>
+) -> AsyncStream<[Route<Screen>]> {
+	guard let head = steps.first else {
+		return .finished
+	}
+
+	let tail = steps.dropFirst()
+
+	return AsyncStream { continuation in
+		Task {
+			do {
+				continuation.yield(head)
+
+				for screen in tail {
+					try await scheduler.sleep(for: .seconds(0.65))
+					continuation.yield(screen)
+				}
+
+				continuation.finish()
+			} catch {
+				continuation.finish()
+			}
+		}
+	}
 }
