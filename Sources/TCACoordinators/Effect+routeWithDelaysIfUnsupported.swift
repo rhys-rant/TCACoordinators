@@ -5,7 +5,7 @@ import Foundation
 import SwiftUI
 import CombineSchedulers
 
-public extension EffectPublisher where Action: IndexedRouterAction, Failure == Never {
+public extension Effect where Action: IndexedRouterAction {
   /// Allows arbitrary changes to be made to the routes collection, even if SwiftUI does not support such changes within a single
   /// state update. For example, SwiftUI only supports pushing, presenting or dismissing one screen at a time. Any changes can be
   /// made to the routes passed to the transform closure, and where those changes are not supported within a single update by
@@ -41,7 +41,7 @@ public extension EffectPublisher where Action: IndexedRouterAction, Failure == N
   }
 }
 
-public extension EffectPublisher where Action: IdentifiedRouterAction, Failure == Never {
+public extension Effect where Action: IdentifiedRouterAction {
   /// Allows arbitrary changes to be made to the routes collection, even if SwiftUI does not support such changes within a single
   /// state update. For example, SwiftUI only supports pushing, presenting or dismissing one screen at a time. Any changes can be
   /// made to the routes passed to the transform closure, and where those changes are not supported within a single update by
@@ -93,7 +93,7 @@ func scheduledSteps<Screen>(
 				continuation.yield(head)
 
 				for screen in tail {
-					try await scheduler.sleep(for: .seconds(0.65))
+					try await scheduler.sleep(for: .milliseconds(650))
 					continuation.yield(screen)
 				}
 

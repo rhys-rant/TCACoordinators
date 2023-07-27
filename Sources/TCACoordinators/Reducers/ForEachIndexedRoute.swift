@@ -1,7 +1,7 @@
 import ComposableArchitecture
 import Foundation
 
-struct ForEachIndexedRoute<CoordinatorReducer: ReducerProtocol, ScreenReducer: ReducerProtocol, CoordinatorID: Hashable>: ReducerProtocol {
+struct ForEachIndexedRoute<CoordinatorReducer: Reducer, ScreenReducer: Reducer, CoordinatorID: Hashable>: Reducer {
   let coordinatorReducer: CoordinatorReducer
   let screenReducer: ScreenReducer
   let cancellationId: CoordinatorID?
@@ -9,7 +9,7 @@ struct ForEachIndexedRoute<CoordinatorReducer: ReducerProtocol, ScreenReducer: R
   let toLocalAction: CasePath<CoordinatorReducer.Action, (Int, ScreenReducer.Action)>
   let updateRoutes: CasePath<CoordinatorReducer.Action, [Route<ScreenReducer.State>]>
   
-  var body: some ReducerProtocol<CoordinatorReducer.State, CoordinatorReducer.Action> {
+	var body: some ReducerOf<CoordinatorReducer> {
     CancelEffectsOnDismiss(
       coordinatedScreensReducer: EmptyReducer()
         .forEachIndex(toLocalState, action: toLocalAction) {
@@ -28,15 +28,15 @@ struct ForEachIndexedRoute<CoordinatorReducer: ReducerProtocol, ScreenReducer: R
   }
 }
 
-public extension ReducerProtocol {
-  func forEachRoute<ScreenReducer: ReducerProtocol, ScreenState, ScreenAction, CoordinatorID: Hashable>(
+public extension Reducer {
+	func forEachRoute<ScreenReducer: Reducer, CoordinatorID: Hashable>(
     coordinatorIdForCancellation: CoordinatorID?,
     toLocalState: WritableKeyPath<Self.State, [Route<ScreenReducer.State>]>,
     toLocalAction: CasePath<Self.Action, (Int, ScreenReducer.Action)>,
     updateRoutes: CasePath<Self.Action, [Route<ScreenReducer.State>]>,
-    @ReducerBuilder<ScreenState, ScreenAction> screenReducer: () -> ScreenReducer
-  ) -> some ReducerProtocol<State, Action> where ScreenState == ScreenReducer.State, ScreenAction == ScreenReducer.Action {
-    return ForEachIndexedRoute(
+		@ReducerBuilder<ScreenReducer.State, ScreenReducer.Action> screenReducer: () -> ScreenReducer
+	) -> some ReducerOf<Self> {
+    ForEachIndexedRoute(
       coordinatorReducer: self,
       screenReducer: screenReducer(),
       cancellationId: coordinatorIdForCancellation,
@@ -47,7 +47,7 @@ public extension ReducerProtocol {
   }
 }
 
-public extension ReducerProtocol where State: IndexedRouterState, Action: IndexedRouterAction, State.Screen == Action.Screen {
+public extension Reducer where State: IndexedRouterState, Action: IndexedRouterAction, State.Screen == Action.Screen {
   /// Allows a screen reducer to be incorporated into a coordinator reducer, such that each screen in
   /// the coordinator's routes Array will have its actions and state propagated. When screens are
   /// dismissed, the routes will be updated. If a cancellation identifier is passed, in-flight effects
@@ -57,10 +57,10 @@ public extension ReducerProtocol where State: IndexedRouterState, Action: Indexe
   ///   will be combined with the screen's identifier.
   ///   - screenReducer: The reducer that operates on all of the individual screens.
   /// - Returns: A new reducer combining the coordinator-level and screen-level reducers.
-  func forEachRoute<ScreenReducer: ReducerProtocol, ScreenState, ScreenAction, CoordinatorID: Hashable>(
+	func forEachRoute<ScreenReducer: Reducer, ScreenState, ScreenAction, CoordinatorID: Hashable>(
     coordinatorIdForCancellation: CoordinatorID?,
     @ReducerBuilder<ScreenState, ScreenAction> screenReducer: () -> ScreenReducer
-  ) -> some ReducerProtocol<State, Action>
+	) -> some Reducer<State, Action>
     where State.Screen == ScreenReducer.State, ScreenReducer.Action == Action.ScreenAction,
           ScreenState == ScreenReducer.State, ScreenAction == ScreenReducer.Action {
     return ForEachIndexedRoute(
@@ -82,10 +82,10 @@ public extension ReducerProtocol where State: IndexedRouterState, Action: Indexe
   ///   will be combined with the screen's identifier. Defaults to the type of the parent reducer.
   ///   - screenReducer: The reducer that operates on all of the individual screens.
   /// - Returns: A new reducer combining the coordinator-level and screen-level reducers.
-  func forEachRoute<ScreenReducer: ReducerProtocol, ScreenState, ScreenAction>(
+	func forEachRoute<ScreenReducer: Reducer, ScreenState, ScreenAction>(
     cancellationIdType: Any.Type = Self.self,
     @ReducerBuilder<ScreenState, ScreenAction> screenReducer: () -> ScreenReducer
-  ) -> some ReducerProtocol<State, Action>
+	) -> some Reducer<State, Action>
     where State.Screen == ScreenReducer.State, ScreenReducer.Action == Action.ScreenAction,
           ScreenState == ScreenReducer.State, ScreenAction == ScreenReducer.Action {
     return ForEachIndexedRoute(

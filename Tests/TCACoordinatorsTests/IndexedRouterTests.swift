@@ -4,16 +4,17 @@ import XCTest
 
 @MainActor
 final class IndexedRouterTests: XCTestCase {
-  func testActionPropagation() {
+  func testActionPropagation() async {
     let scheduler = DispatchQueue.test
-    let store = TestStore(
-      initialState: Parent.State(routes: [.root(.init(count: 42)), .sheet(.init(count: 11))]),
-      reducer: Parent(scheduler: scheduler)
-    )
-    store.send(.routeAction(0, action: .increment)) {
+		let store = TestStore(
+			initialState: Parent.State(routes: [.root(.init(count: 42)), .sheet(.init(count: 11))])
+		) {
+			Parent(scheduler: scheduler)
+		}
+		await store.send(.routeAction(0, action: .increment)) {
       $0.routes[0].screen.count += 1
     }
-    store.send(.routeAction(1, action: .increment)) {
+		await store.send(.routeAction(1, action: .increment)) {
       $0.routes[1].screen.count += 1
     }
   }
@@ -26,9 +27,10 @@ final class IndexedRouterTests: XCTestCase {
           .root(.init(count: 42)),
           .sheet(.init(count: 11))
         ]
-      ),
-      reducer: Parent(scheduler: scheduler)
-    )
+      )
+		) {
+			Parent(scheduler: scheduler)
+		}
     // Expect increment action after 1 second.
     await store.send(.routeAction(1, action: .incrementLaterTapped))
     await scheduler.advance(by: .seconds(1))
@@ -51,12 +53,14 @@ final class IndexedRouterTests: XCTestCase {
     ]
     let scheduler = DispatchQueue.test
     let store = TestStore(
-      initialState: Parent.State(routes: initialRoutes
-      ),
-      reducer: Parent(scheduler: scheduler)
-    )
-    await store.send(.goBackToRoot)
+      initialState: Parent.State(routes: initialRoutes)
+		) {
+			Parent(scheduler: scheduler)
+		}
+    let goBackToRoot = await store.send(.goBackToRoot)
     await store.receive(.updateRoutes(initialRoutes))
+
+		await scheduler.advance(by: .milliseconds(650))
     let firstTwo = Array(initialRoutes.prefix(2))
     await store.receive(.updateRoutes(firstTwo)) {
       $0.routes = firstTwo
@@ -66,10 +70,12 @@ final class IndexedRouterTests: XCTestCase {
     await store.receive(.updateRoutes(firstOne)) {
       $0.routes = firstOne
     }
+
+		await goBackToRoot.cancel()
   }
 }
 
-private struct Child: ReducerProtocol {
+private struct Child: Reducer {
   let scheduler: TestSchedulerOf<DispatchQueue>
   struct State: Equatable {
     var count = 0
@@ -80,23 +86,23 @@ private struct Child: ReducerProtocol {
     case increment
   }
 
-  var body: some ReducerProtocol<State, Action> {
+	var body: some ReducerOf<Self> {
     Reduce { state, action in
       switch action {
       case .increment:
         state.count += 1
         return .none
       case .incrementLaterTapped:
-        return .task {
+        return .run { send in
           try await scheduler.sleep(for: .seconds(1))
-          return .increment
+          await send(.increment)
         }
       }
     }
   }
 }
 
-private struct Parent: ReducerProtocol {
+private struct Parent: Reducer {
   struct State: Equatable, IndexedRouterState {
     var routes: [Route<Child.State>]
   }
@@ -108,7 +114,7 @@ private struct Parent: ReducerProtocol {
   }
   let scheduler: TestSchedulerOf<DispatchQueue>
 
-  var body: some ReducerProtocol<State, Action> {
+	var body: some Reducer<State, Action> {
     Reduce { state, action in
       switch action {
       case .goBackToRoot:

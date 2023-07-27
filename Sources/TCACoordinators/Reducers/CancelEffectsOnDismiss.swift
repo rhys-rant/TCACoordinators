@@ -7,7 +7,14 @@ public struct CancellationIdentity<CoordinatorID: Hashable, RouteID: Hashable>: 
   let routeId: RouteID
 }
 
-struct CancelEffectsOnDismiss<CoordinatorScreensReducer: ReducerProtocol, CoordinatorReducer: ReducerProtocol, CoordinatorID: Hashable, ScreenAction, RouteID: Hashable, C: Collection>: ReducerProtocol where CoordinatorScreensReducer.State == CoordinatorReducer.State, CoordinatorScreensReducer.Action == CoordinatorReducer.Action {
+struct CancelEffectsOnDismiss<
+	CoordinatorScreensReducer: Reducer,
+	CoordinatorReducer: Reducer,
+	CoordinatorID: Hashable,
+	ScreenAction,
+	RouteID: Hashable,
+	C: Collection
+>: Reducer where CoordinatorScreensReducer.State == CoordinatorReducer.State, CoordinatorScreensReducer.Action == CoordinatorReducer.Action {
   let coordinatedScreensReducer: CoordinatorScreensReducer
   let routes: (CoordinatorReducer.State) -> C
   let routeAction: CasePath<Action, (RouteID, ScreenAction)>
@@ -15,7 +22,7 @@ struct CancelEffectsOnDismiss<CoordinatorScreensReducer: ReducerProtocol, Coordi
   let getIdentifier: (C.Element, C.Index) -> RouteID
   let coordinatorReducer: CoordinatorReducer
 
-  var body: some ReducerProtocol<CoordinatorReducer.State, CoordinatorReducer.Action> {
+	var body: some ReducerOf<CoordinatorReducer> {
     if let cancellationId {
       CancelTaggedRouteEffectsOnDismiss(
         coordinatorReducer: CombineReducers {
@@ -39,7 +46,7 @@ struct CancelEffectsOnDismiss<CoordinatorScreensReducer: ReducerProtocol, Coordi
   }
 }
 
-struct TagRouteEffectsForCancellation<ScreenReducer: ReducerProtocol, CoordinatorID: Hashable, RouteID: Hashable, RouteAction>: ReducerProtocol {
+struct TagRouteEffectsForCancellation<ScreenReducer: Reducer, CoordinatorID: Hashable, RouteID: Hashable, RouteAction>: Reducer {
   typealias State = ScreenReducer.State
   typealias Action = ScreenReducer.Action
 
@@ -47,19 +54,21 @@ struct TagRouteEffectsForCancellation<ScreenReducer: ReducerProtocol, Coordinato
   let coordinatorId: CoordinatorID
   let routeAction: CasePath<Action, (RouteID, RouteAction)>
 
-  func reduce(into state: inout State, action: Action) -> EffectTask<ScreenReducer.Action> {
-    let effect = screenReducer.reduce(into: &state, action: action)
+	var body: some ReducerOf<Self> {
+		Reduce { state, action in
+			let effect = screenReducer.reduce(into: &state, action: action)
 
-    if let (routeId, _) = routeAction.extract(from: action) {
-      let identity = CancellationIdentity(coordinatorId: coordinatorId, routeId: routeId)
-      return effect.cancellable(id: AnyHashable(identity))
-    } else {
-      return effect
-    }
-  }
+			if let (routeId, _) = routeAction.extract(from: action) {
+				let identity = CancellationIdentity(coordinatorId: coordinatorId, routeId: routeId)
+				return effect.cancellable(id: AnyHashable(identity))
+			} else {
+				return effect
+			}
+		}
+	}
 }
 
-struct CancelTaggedRouteEffectsOnDismiss<CoordinatorReducer: ReducerProtocol, CoordinatorID: Hashable, C: Collection, RouteID: Hashable>: ReducerProtocol {
+struct CancelTaggedRouteEffectsOnDismiss<CoordinatorReducer: Reducer, CoordinatorID: Hashable, C: Collection, RouteID: Hashable>: Reducer {
   typealias State = CoordinatorReducer.State
   typealias Action = CoordinatorReducer.Action
 
@@ -68,12 +77,12 @@ struct CancelTaggedRouteEffectsOnDismiss<CoordinatorReducer: ReducerProtocol, Co
   let routes: (State) -> C
   let getIdentifier: (C.Element, C.Index) -> RouteID
 
-  func reduce(into state: inout State, action: Action) -> EffectTask<CoordinatorReducer.Action> {
+	func reduce(into state: inout State, action: Action) -> Effect<CoordinatorReducer.Action> {
     let preRoutes = routes(state)
     let effect = coordinatorReducer.reduce(into: &state, action: action)
     let postRoutes = routes(state)
 
-    var effects: [EffectTask<Action>] = [effect]
+    var effects: [Effect<Action>] = [effect]
 
     let preIds = zip(preRoutes, preRoutes.indices).map(getIdentifier)
     let postIds = zip(postRoutes, postRoutes.indices).map(getIdentifier)
@@ -81,9 +90,9 @@ struct CancelTaggedRouteEffectsOnDismiss<CoordinatorReducer: ReducerProtocol, Co
     let dismissedIds = Set(preIds).subtracting(postIds)
     for dismissedId in dismissedIds {
       let identity = CancellationIdentity(coordinatorId: coordinatorId, routeId: dismissedId)
-      effects.append(EffectTask<Action>.cancel(id: AnyHashable(identity)))
+      effects.append(Effect<Action>.cancel(id: AnyHashable(identity)))
     }
 
-    return EffectTask.merge(effects)
+    return .merge(effects)
   }
 }
